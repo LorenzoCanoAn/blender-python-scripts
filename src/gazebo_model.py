@@ -1,13 +1,11 @@
 """By Lorenzo Cano Andres
-Class to manipulate gazebo models
+Classes to manipulate gazebo models and their different components
 """
 # IMPORTS
-from re import I
-import bpy
 from xml.etree import ElementTree
 import os
+import shutil
 
-from regex import W
 
 # GLOBAL VARIABLES
 SUBT_MODELS_DIRECTORY = "/home/lorenzo/catkin_ws/src/danilo/subt_gazebo/models_"
@@ -47,6 +45,7 @@ def is_type_in_folder(folder, type_termination):
 
 
 def try_to_fix_xml_file(path):
+    """This function tries to use all the different fixes, until one reports a positive fix"""
     if try_fix_xml_for_first_line(path):
         return True
     else:
@@ -57,6 +56,7 @@ def try_to_fix_xml_file(path):
 
 
 def try_fix_xml_for_first_line(path):
+    """In case an .xml file starts with an empty line, it deletes it"""
     try:
         with open(path, "r") as f:
             lines = f.readlines()
@@ -74,6 +74,8 @@ def try_fix_xml_for_first_line(path):
 
 
 class GazeboModel:
+    """Basic class to manage the subfolders and files that compose a gazebo model"""
+
     def __init__(self, path):
         self.base_folder = path
         self.name = os.path.basename(path)
@@ -122,14 +124,15 @@ class GazeboModel:
                 m = GazeboModelMesh(self, mesh_data)
                 if not m in self.meshes:
                     self.meshes.append(m)
-                
+
 # -----------------------------------------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------------------------------------
 
 
 class GazeboModelMesh:
     """This class will be used to manipulate the data of the meshes used
-    by the gazebo models"""
+    by the gazebo models. All the interaction with the files should be done 
+    from this class"""
 
     def __init__(self, parent: GazeboModel, data: dict):
         self.parent = parent
@@ -140,12 +143,12 @@ class GazeboModelMesh:
     def __str__(self):
         return f"Model mesh: {self.uri}"
 
-#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return other.path == self.path
         return False
-                 
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     def _parse_data(self):
@@ -154,20 +157,44 @@ class GazeboModelMesh:
         self.scale = tuple([float(i) for i in self.data["scale"].split(" ")]) if "scale" in self.data.keys() else (
             1.0, 1.0, 1.0)
         if not self.uri is None:
-            self.path = os.path.join(self.parent.base_folder, "meshes",os.path.basename(self.uri))
+            self.path = os.path.join(
+                self.parent.base_folder, "meshes", os.path.basename(self.uri))
+            self.folder, self.file_name = os.path.split(self.path)
+            _, self.file_type = os.path.splitext(self.path)
+            self.backup_file_name = "__bkp__" + self.file_name
+            self.backup_path = os.path.join(self.folder, self.backup_file_name)
             if not os.path.exists(self.path):
                 raise Exception("The mesh file does not exist")
-            _, self.file_type = os.path.splitext(self.path)
+
         else:
             self.path = None
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def save_backup(self):
+        '''This function saves the data currently in the file pointed by this instance, 
+        in the same folder, with the same name, but with __bkp__ added'''
+        shutil.copy(self.path, self.backup_path)
+    
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def restore_backup(self):
+        '''If there is a backup file, this function restores it'''
+        if os.path.exists(self.backup_file_name):
+            shutil.copy(self.backup_path,self.path)
+        else:
+            raise Exception(f"No backup for {self.path} mesh")
+
+        
+        
+        
 
 # MAIN
 def main():
     models = models_from_folder(SUBT_MODELS_DIRECTORY)
     for model in models:
         for mesh in model.meshes:
-            print(mesh)
-        
+            assert isinstance(mesh, GazeboModelMesh)
+            mesh.save_backup()
+
 
 if __name__ == "__main__":
     main()
