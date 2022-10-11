@@ -145,6 +145,7 @@ class GazeboModelMesh:
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     def __eq__(self, other):
+        """A mesh is equal to other mesh if they point to the same file"""
         if isinstance(other, self.__class__):
             return other.path == self.path
         return False
@@ -190,11 +191,13 @@ class GazeboModelMesh:
 # MAIN
 def main():
     models = models_from_folder(SUBT_MODELS_DIRECTORY)
+    n_dae, n_obj = 0, 0
     for model in models:
         for mesh in model.meshes:
             assert isinstance(mesh, GazeboModelMesh)
-            mesh.save_backup()
-
+            n_dae += int(mesh.file_type in (".dae", ".DAE"))
+            n_obj += int(mesh.file_type in (".obj"))
+        print(f"N dae: ")
 
 if __name__ == "__main__":
     main()

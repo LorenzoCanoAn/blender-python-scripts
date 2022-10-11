@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "blender_gazebo"
+version = "0.0.1"
+authors = [
+  { name="Lorenzo Cano", email="lcano@unizar.es" },
+]
+description = "A simple package to interface blender with gazebo models"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/LorenzoCanoAn/blender-python-scripts"
+"Bug Tracker" = "https://github.com/LorenzoCanoAn/blender-python-scripts/issues/"
