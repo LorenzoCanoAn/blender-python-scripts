@@ -51,7 +51,6 @@ def try_to_fix_xml_file(path):
     else:
         return False
 
-
 # -----------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -71,7 +70,6 @@ def try_fix_xml_for_first_line(path):
         raise
 
 # CLASSES
-
 
 class GazeboModel:
     """Basic class to manage the subfolders and files that compose a gazebo model"""
@@ -95,6 +93,7 @@ class GazeboModel:
                 self.base_folder, "model.config")
             assert "model.sdf" in subdirs, f"no model.sdf for {self.base_folder}"
             self.sdf_file_path = os.path.join(self.base_folder, "model.sdf")
+            self.sdf_bkp_file_path = os.path.join(self.base_folder, "__bkp__model.sdf")
             assert "meshes" in subdirs, f"no mesh folder for {self.base_folder}"
             self.meshes_folder = os.path.join(self.base_folder, "meshes")
         except AssertionError:
@@ -118,12 +117,33 @@ class GazeboModel:
         self.meshes = list()
         for child in self.xml_tree.iter():
             if child.tag == "mesh":
-                mesh_data = {}
-                for mesh_member in child:
-                    mesh_data[mesh_member.tag] = mesh_member.text
-                m = GazeboModelMesh(self, mesh_data)
+                m = GazeboModelMesh(self, child)
                 if not m in self.meshes:
                     self.meshes.append(m)
+                else:
+                    self.meshes[self.meshes.index(m)].add_xml_reference(child)
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def update_sdf_file(self):
+        '''Re-write the info in the sdf file'''
+        self.xml_tree.write(self.sdf_file_path)
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def create_backup(self):
+        """Copy the contents of all the mesh files and the model.sdf file into 
+        a backup files"""
+        shutil.copy(self.sdf_file_path,self.sdf_bkp_file_path)
+        for mesh in self.meshes:
+            assert isinstance(mesh, GazeboModelMesh)
+            mesh.create_backup()
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def restore_from_backup(self):
+        '''Restore the contents of the mesh files and the model.sdf file fromthe backup files'''
+        shutil.copy(self.sdf_bkp_file_path, self.sdf_file_path)
+        for mesh in self.meshes:
+            assert isinstance(mesh, GazeboModelMesh)
+            mesh.restore_from_backup()
 
 # -----------------------------------------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------------------------------------
@@ -134,12 +154,11 @@ class GazeboModelMesh:
     by the gazebo models. All the interaction with the files should be done 
     from this class"""
 
-    def __init__(self, parent: GazeboModel, data: dict):
+    def __init__(self, parent: GazeboModel, xml_element):
         self.parent = parent
-        self.data = data
+        self.xml_elements = [xml_element,]
         self._parse_data()
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
     def __str__(self):
         return f"Model mesh: {self.uri}"
 
@@ -154,9 +173,8 @@ class GazeboModelMesh:
 
     def _parse_data(self):
         '''Process the data dictionary'''
-        self.uri = self.data["uri"] if "uri" in self.data.keys() else None
-        self.scale = tuple([float(i) for i in self.data["scale"].split(" ")]) if "scale" in self.data.keys() else (
-            1.0, 1.0, 1.0)
+        self.uri = self.xml_elements[0].find("uri").text
+        self.scale = self.xml_elements[0].find("scale")
         if not self.uri is None:
             self.path = os.path.join(
                 self.parent.base_folder, "meshes", os.path.basename(self.uri))
@@ -166,23 +184,57 @@ class GazeboModelMesh:
             self.backup_path = os.path.join(self.folder, self.backup_file_name)
             if not os.path.exists(self.path):
                 raise Exception("The mesh file does not exist")
-
         else:
             self.path = None
+        if self.scale is None:
+            self.scale = (1.0,1.0,1.0)
+        else: 
+            self.scale = tuple([float(i) for i in self.scale.text.split(" ")])
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    def save_backup(self):
+    def create_backup(self):
         '''This function saves the data currently in the file pointed by this instance, 
         in the same folder, with the same name, but with __bkp__ added'''
         shutil.copy(self.path, self.backup_path)
     
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    def restore_backup(self):
+    def restore_from_backup(self):
         '''If there is a backup file, this function restores it'''
-        if os.path.exists(self.backup_file_name):
+        if os.path.exists(self.backup_path):
             shutil.copy(self.backup_path,self.path)
         else:
-            raise Exception(f"No backup for {self.path} mesh")
+            raise Exception(f"{self.backup_path} does not exist")
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def add_xml_reference(self, xml_element):
+        '''If there is more than one mention of a mesh in a gazebo model,
+        this add the mention to this object'''
+        self.xml_elements.append(xml_element)
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def update_scale_in_xml_references(self, new_scale):
+        '''
+        The new_scale should be entered as a string of "f f f".
+        This method will go through all the mentions to this mesh in 
+        the model.sdf file, updating the scale parameter to the desired
+        one.
+        '''
+        for ref in self.xml_elements:
+            scale_element = ref.find("scale")
+            if not scale_element is None:
+                scale_element.text = new_scale
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def update_uri_in_xml_references(self, new_uri):
+        '''
+        If the model should now load a new mesh file, this must be specified in the model.sdf (.xml)
+        file. With this function, the new uri can be specified and it will be modified'''
+        for ref in self.xml_elements:
+            uri_element = ref.find("uri")
+            if not uri_element is None:
+                uri_element.text = new_uri
+
+         
+
 
         
         
@@ -191,13 +243,9 @@ class GazeboModelMesh:
 # MAIN
 def main():
     models = models_from_folder(SUBT_MODELS_DIRECTORY)
-    n_dae, n_obj = 0, 0
     for model in models:
         for mesh in model.meshes:
-            assert isinstance(mesh, GazeboModelMesh)
-            n_dae += int(mesh.file_type in (".dae", ".DAE"))
-            n_obj += int(mesh.file_type in (".obj"))
-        print(f"N dae: ")
+            print(mesh.uri)
 
 if __name__ == "__main__":
     main()
