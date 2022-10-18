@@ -2,22 +2,34 @@
 Classes to manipulate gazebo models and their different components
 """
 # IMPORTS
-from xml.etree import ElementTree
+from xml.etree.ElementTree import ElementTree
 import os
 import shutil
+from subprocess import call
 
+from requests import delete
 
 # GLOBAL VARIABLES
-SUBT_MODELS_DIRECTORY = "/home/lorenzo/catkin_ws/src/danilo/subt_gazebo/models_"
+SUBT_MODELS_DIRECTORY = "/home/lorenzo/git/subt_gazebo/models"
 
 # FUNCTIONS
 # -----------------------------------------------------------------------------------------------------------------------------------
+def cp_dir(source, target):
+    """
+    Copy the source directory and all its contents
+    to the target directory. To work as intended, the target 
+    directory should not exist
+    """
+    call(['cp', '-a', source, target]) # Linux
+
 
 
 def models_from_folder(folder: str):
-    """Given a folder containing gazebo models, iterate
+    """
+    Given a folder containing gazebo models, iterate
     over elements of folder and create instances of GazeboModel 
-    for each"""
+    for each
+    """
     assert os.path.isdir(folder)
     list_of_models = list()
     for model_name in os.listdir(folder):
@@ -27,13 +39,34 @@ def models_from_folder(folder: str):
         except Exception as e:
             print(e)
     return list_of_models
-
-# -----------------------------------------------------------------------------------------------------------------------------------
-
-
+    
+#-----------------------------------------------------------------------------------------------------------------------------------
+def copy_model_with_different_name(model, new_name):
+    '''
+    This function takes a GazeboModel object, and copies it to 
+    a different folder, changing the name inside the archives
+    The things that have to be changed are:
+    - The name of the folder
+    - The name in the model.sdf file
+    - The name in the model.config file
+    '''
+    assert isinstance(model, GazeboModel)
+    # First, copy all the contetnts to new folder
+    models_folder = os.path.dirname(model.base_folder)
+    copied_model_path = os.path.join(models_folder, new_name)
+    if os.path.isdir(copied_model_path):
+        shutil.rmtree(copied_model_path)
+    cp_dir(model.base_folder, copied_model_path)
+    # Second change the name in the model.config and model.sdf files
+    copied_model = GazeboModel(copied_model_path)
+    copied_model.change_name(new_name)
+    
+#-----------------------------------------------------------------------------------------------------------------------------------
 def is_type_in_folder(folder, type_termination):
-    """Given a folder containing files and a type of file indicated
-    as as the file termination, return the number of files that end on that termination"""
+    """
+    Given a folder containing files and a type of file indicated
+    as as the file termination, return the number of files that end on that termination
+    """
     number = 0
     l = len(type_termination)
     for filename in os.listdir(folder):
@@ -41,21 +74,21 @@ def is_type_in_folder(folder, type_termination):
             number += 1
     return number
 
-# -----------------------------------------------------------------------------------------------------------------------------------
-
-
+#-----------------------------------------------------------------------------------------------------------------------------------
 def try_to_fix_xml_file(path):
-    """This function tries to use all the different fixes, until one reports a positive fix"""
+    """
+    This function tries to use all the different fixes, until one reports a positive fix
+    """
     if try_fix_xml_for_first_line(path):
         return True
     else:
         return False
 
 # -----------------------------------------------------------------------------------------------------------------------------------
-
-
 def try_fix_xml_for_first_line(path):
-    """In case an .xml file starts with an empty line, it deletes it"""
+    """
+    In case an .xml file starts with an empty line, it deletes it
+    """
     try:
         with open(path, "r") as f:
             lines = f.readlines()
@@ -69,53 +102,84 @@ def try_fix_xml_for_first_line(path):
     except:
         raise
 
+# -----------------------------------------------------------------------------------------------------------------------------------
+def load_xml_file(path,  after_fix= False):
+    """
+    Create an ElementTree form an .xml file, 
+    if it fails, try to fix it, and open it again
+    """
+    try:
+        tree = ElementTree(file=path)
+    except:
+        if not after_fix:
+            if try_to_fix_xml_file(path):
+                tree = load_xml_file(path, after_fix=True)
+        else:
+            raise Exception(
+                f"Problem reading xml file for {path} and no fix available")
+    return tree
+
+#-----------------------------------------------------------------------------------------------------------------------------------
+def change_uri_root(original_gazebo_uri, new_model_name):
+    """
+    This functiontakes an uri in the format:
+    model://MODEL_NAME/INTERNAL_PATH_TO_MESH
+    Where MODEL_NAME is the name of a gazebo model
+    and the INTERNAL_PATH is the path from the base folder of
+    the model to the specific file that the uri references.
+    This funciton substitutes the MODEL_NAME for a new one
+    """
+     
+
 # CLASSES
 
 class GazeboModel:
-    """Basic class to manage the subfolders and files that compose a gazebo model"""
+    """
+    Basic class to manage the subfolders and files that compose a gazebo model
+    """
 
     def __init__(self, path):
         self.base_folder = path
         self.name = os.path.basename(path)
         self._check_contents_of_base_folder()
+        self._load_files()
         self._parse_sdf_file()
 
     def __str__(self):
         return f"{self.__class__.__name__} of {self.name}"
 
     def _check_contents_of_base_folder(self):
-        """Check that the model contains the files that are expected of it, raise
-        an exception if that is not the case"""
-        subdirs = os.listdir(self.base_folder)
+        """
+        Check that the model contains the files that are expected of it, raise
+        an exception if that is not the case
+        """
+        model_contents = os.listdir(self.base_folder)
         try:
-            assert "model.config" in subdirs, f"no model.config for {self.base_folder}"
+            assert "model.config" in model_contents, f"no model.config for {self.base_folder}"
             self.config_file_path = os.path.join(
                 self.base_folder, "model.config")
-            assert "model.sdf" in subdirs, f"no model.sdf for {self.base_folder}"
+            assert "model.sdf" in model_contents, f"no model.sdf for {self.base_folder}"
             self.sdf_file_path = os.path.join(self.base_folder, "model.sdf")
             self.sdf_bkp_file_path = os.path.join(self.base_folder, "__bkp__model.sdf")
-            assert "meshes" in subdirs, f"no mesh folder for {self.base_folder}"
+            assert "meshes" in model_contents, f"no mesh folder for {self.base_folder}"
             self.meshes_folder = os.path.join(self.base_folder, "meshes")
         except AssertionError:
             raise
+    
+    def _load_files(self, after_fix = False):
+        """
+        This will load the desired .xml file and report return it as a elementtree
+        """
+        self.config_tree = load_xml_file(self.config_file_path)
+        self.sdf_tree = load_xml_file(self.sdf_file_path)
 
     def _parse_sdf_file(self, after_fix=False):
         """This function reads the .sdf (which is an .xml) file and tries to find the meshes 
         mentioned in it in the meshes file, in the case that it finds them, 
         it stores the path to the mesh files, and sets the 'local_meshes' to true"""
-        # Load the xml_file as an xml_tree
-        try:
-            self.xml_tree = ElementTree.ElementTree(file=self.sdf_file_path)
-        except:
-            if not after_fix:
-                if try_to_fix_xml_file(self.sdf_file_path):
-                    self._parse_sdf_file(after_fix=True)
-            else:
-                raise Exception(
-                    f"Problem reading xml file for {self.name} and no fix available")
-        # Get get the meshes from the model
+        # Extrat the relevant info fromt the sdf file
         self.meshes = list()
-        for child in self.xml_tree.iter():
+        for child in self.sdf_tree.iter():
             if child.tag == "mesh":
                 m = GazeboModelMesh(self, child)
                 if not m in self.meshes:
@@ -125,13 +189,24 @@ class GazeboModel:
 
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     def update_sdf_file(self):
-        '''Re-write the info in the sdf file'''
-        self.xml_tree.write(self.sdf_file_path)
+        '''
+        Re-write the info in the model.sdf file
+        '''
+        self.sdf_tree.write(self.sdf_file_path)
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def update_config_file(self):
+        '''
+        Re-write the info in the model.config file
+        '''
+        self.config_tree.write(self.config_file_path)
 
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     def create_backup(self):
-        """Copy the contents of all the mesh files and the model.sdf file into 
-        a backup files"""
+        """
+        Copy the contents of all the mesh files and the model.sdf file into 
+        a backup files
+        """
         shutil.copy(self.sdf_file_path,self.sdf_bkp_file_path)
         for mesh in self.meshes:
             assert isinstance(mesh, GazeboModelMesh)
@@ -139,20 +214,35 @@ class GazeboModel:
 
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     def restore_from_backup(self):
-        '''Restore the contents of the mesh files and the model.sdf file fromthe backup files'''
+        '''
+        Restore the contents of the mesh files and the model.sdf file fromthe backup files
+        '''
         shutil.copy(self.sdf_bkp_file_path, self.sdf_file_path)
         for mesh in self.meshes:
             assert isinstance(mesh, GazeboModelMesh)
             mesh.restore_from_backup()
+
+#- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    def change_name(self, new_name):
+        '''
+        This function changes the name in the model.sdf and model.config files
+        '''
+        self.config_tree.find("name").text = new_name
+        self.update_config_file()
+        self.sdf_tree.find("model").attrib["name"] = new_name
+        self.update_sdf_file()
+        
 
 # -----------------------------------------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------------------------------------
 
 
 class GazeboModelMesh:
-    """This class will be used to manipulate the data of the meshes used
+    """
+    This class will be used to manipulate the data of the meshes used
     by the gazebo models. All the interaction with the files should be done 
-    from this class"""
+    from this class
+    """
 
     def __init__(self, parent: GazeboModel, xml_element):
         self.parent = parent
@@ -164,7 +254,9 @@ class GazeboModelMesh:
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     def __eq__(self, other):
-        """A mesh is equal to other mesh if they point to the same file"""
+        """
+        A mesh is equal to other mesh if they point to the same file
+        """
         if isinstance(other, self.__class__):
             return other.path == self.path
         return False
@@ -246,6 +338,7 @@ def main():
     for model in models:
         for mesh in model.meshes:
             print(mesh.uri)
+    copy_model_with_different_name(models[0], models[0].name+"-1")
 
 if __name__ == "__main__":
     main()
