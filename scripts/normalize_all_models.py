@@ -31,7 +31,7 @@ for n, model in enumerate(models):
             # Change the scale in the model.sdf document
             model_mesh.update_scale_in_xml_references("1.0 1.0 1.0")
             # Save the model.sdf document
-            model.update_sdf_file()
+            model.write_sdf_file()
             # Save the mesh file with the change in scale 
             blender.save_mesh(model_mesh.path)
 
@@ -45,6 +45,6 @@ for n, model in enumerate(models):
             blender.save_mesh(new_path)
             # Save the new model.sdf file with the updated reference
             model_mesh.update_uri_in_xml_references(new_uri)
-            model.update_sdf_file()
+            model.write_sdf_file()
     except Exception as e:
         print(e)

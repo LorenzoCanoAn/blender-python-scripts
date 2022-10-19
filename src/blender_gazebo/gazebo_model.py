@@ -23,7 +23,7 @@ def cp_dir(source, target):
     call(['cp', '-a', source, target]) # Linux
 
 
-
+#-----------------------------------------------------------------------------------------------------------------------------------
 def models_from_folder(folder: str):
     """
     Given a folder containing gazebo models, iterate
@@ -60,6 +60,15 @@ def copy_model_with_different_name(model, new_name):
     # Second change the name in the model.config and model.sdf files
     copied_model = GazeboModel(copied_model_path)
     copied_model.change_name(new_name)
+    # Third, change the base path of the URIs of the meshes
+    for mesh in copied_model.meshes:
+        assert isinstance(mesh, GazeboModelMesh)
+        for xml_reference in mesh.xml_elements:
+            original_uri = xml_reference.find("uri").text
+            new_uri = change_uri_root(original_uri, new_name)
+            xml_reference.find("uri").text = new_uri
+            print(xml_reference.find("uri").text)
+    copied_model.write_sdf_file()
     
 #-----------------------------------------------------------------------------------------------------------------------------------
 def is_type_in_folder(folder, type_termination):
@@ -106,7 +115,8 @@ def try_fix_xml_for_first_line(path):
 def load_xml_file(path,  after_fix= False):
     """
     Create an ElementTree form an .xml file, 
-    if it fails, try to fix it, and open it again
+    if it fails, try to fix it, and open it again.
+    If it fails again, raises an exception.
     """
     try:
         tree = ElementTree(file=path)
@@ -129,6 +139,13 @@ def change_uri_root(original_gazebo_uri, new_model_name):
     the model to the specific file that the uri references.
     This funciton substitutes the MODEL_NAME for a new one
     """
+    uri_elements = original_gazebo_uri.replace("model://","").split("/")
+    uri_elements[0] = new_model_name
+    new_uri = "model:/"
+    for element in uri_elements:
+        new_uri += "/" + element
+    return new_uri
+    
      
 
 # CLASSES
@@ -188,14 +205,14 @@ class GazeboModel:
                     self.meshes[self.meshes.index(m)].add_xml_reference(child)
 
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    def update_sdf_file(self):
+    def write_sdf_file(self):
         '''
         Re-write the info in the model.sdf file
         '''
         self.sdf_tree.write(self.sdf_file_path)
 
 #- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    def update_config_file(self):
+    def write_config_file(self):
         '''
         Re-write the info in the model.config file
         '''
@@ -228,9 +245,9 @@ class GazeboModel:
         This function changes the name in the model.sdf and model.config files
         '''
         self.config_tree.find("name").text = new_name
-        self.update_config_file()
+        self.write_config_file()
         self.sdf_tree.find("model").attrib["name"] = new_name
-        self.update_sdf_file()
+        self.write_sdf_file()
         
 
 # -----------------------------------------------------------------------------------------------------------------------------------
@@ -325,12 +342,6 @@ class GazeboModelMesh:
             if not uri_element is None:
                 uri_element.text = new_uri
 
-         
-
-
-        
-        
-        
 
 # MAIN
 def main():

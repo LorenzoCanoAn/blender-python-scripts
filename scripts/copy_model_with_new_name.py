@@ -9,7 +9,6 @@ def main():
     parser.add_argument("--model_to_copy","-c",required="True")
     parser.add_argument("--new_name","-p",required="True")
     args = parser.parse_known_args()[0]
-    print(args)
     
     models_folder = args.models_folder
     model_to_copy = args.model_to_copy
