@@ -7,7 +7,6 @@ import os
 import shutil
 from subprocess import call
 
-from requests import delete
 
 # GLOBAL VARIABLES
 SUBT_MODELS_DIRECTORY = "/home/lorenzo/git/subt_gazebo/models"
@@ -41,7 +40,7 @@ def models_from_folder(folder: str):
     return list_of_models
     
 #-----------------------------------------------------------------------------------------------------------------------------------
-def copy_model_with_different_name(model, new_name):
+def copy_model_with_different_name(model, new_name, destination_folder  = None):
     '''
     This function takes a GazeboModel object, and copies it to 
     a different folder, changing the name inside the archives
@@ -49,11 +48,16 @@ def copy_model_with_different_name(model, new_name):
     - The name of the folder
     - The name in the model.sdf file
     - The name in the model.config file
+    - The uri of the meshes inside the model.sdf files
     '''
     assert isinstance(model, GazeboModel)
-    # First, copy all the contetnts to new folder
+    # First, copy all the contents fo the model to new folder
     models_folder = os.path.dirname(model.base_folder)
-    copied_model_path = os.path.join(models_folder, new_name)
+    if destination_folder is None:
+        copied_model_path = os.path.join(models_folder, new_name)
+    else:
+        os.makedirs(destination_folder, exist_ok=True)
+        copied_model_path = os.path.join(destination_folder, new_name)
     if os.path.isdir(copied_model_path):
         shutil.rmtree(copied_model_path)
     cp_dir(model.base_folder, copied_model_path)
