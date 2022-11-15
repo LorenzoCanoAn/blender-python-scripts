@@ -1,0 +1,8 @@
+import blender_gazebo.gazebo_blender_model
+import blender_gazebo.blender_functions
+from importlib import reload
+reload(blender_gazebo.blender_functions)
+reload(blender_gazebo.gazebo_blender_model)
+reload(blender_gazebo.blender_functions)
+
+blender_gazebo.blender_functions.toogle_selected_points()

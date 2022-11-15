@@ -3,7 +3,7 @@ For all the models in a folder this script
 restores all the files in the models to their 
 corresponding backups
 """
-from  blender_gazebo.gazebo_model import models_from_folder, GazeboModel
+from  blender_gazebo.gazebo_blender_model import models_from_folder, GazeboBlenderModel
 from argparse import ArgumentParser
 
 def main():
@@ -14,7 +14,7 @@ def main():
     models = models_from_folder(args.folder)
 
     for n, model in enumerate(models):
-        assert isinstance(model, GazeboModel)
+        assert isinstance(model, GazeboBlenderModel)
         try:
             model.restore_from_backup()
         except Exception as e:

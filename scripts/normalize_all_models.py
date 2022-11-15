@@ -6,7 +6,7 @@ It will read a folder containing gazebo models and load them as GazeboModel inst
     need to be imported with the scale
 """
 
-from  blender_gazebo.gazebo_model import models_from_folder, GazeboModel, GazeboModelMesh
+from  blender_gazebo.gazebo_blender_model import models_from_folder, GazeboBlenderModel, GazeboModelMesh
 import blender_gazebo.blender_functions as blender
 import bpy
 import os
@@ -17,12 +17,12 @@ models = models_from_folder(SUBT_MODELS_DIRECTORY)
 
 
 for n, model in enumerate(models):
-    assert isinstance(model, GazeboModel)
+    assert isinstance(model, GazeboBlenderModel)
     try:
         model_mesh = model.meshes[0]
         assert isinstance(model_mesh, GazeboModelMesh)
         blender.clear_workspace()
-        blender.load_mesh(model_mesh)
+        blender.load_gazebo_mesh(model_mesh)
 
         # If the mesh is scaled when imported to gazebo, set it to a scale of 1.
         if model_mesh.scale != (1.0, 1.0, 1.0):
@@ -35,7 +35,7 @@ for n, model in enumerate(models):
             # Save the mesh file with the change in scale 
             blender.save_mesh(model_mesh.path)
 
-        # If the mesh is loaded from an .obj, rotate it, export it as a .dae, and modify the reference
+        # If the scene is loaded from an .obj, rotate it, export it as a .dae, and modify the reference
         if str.lower(model_mesh.file_type) == ".obj":
             new_path = os.path.splitext(model_mesh.path)[0] + ".dae"
             new_uri = os.path.splitext(model_mesh.uri)[0] + ".dae"
@@ -43,7 +43,7 @@ for n, model in enumerate(models):
             bpy.ops.transform.rotate(value=math.pi/2,orient_axis="X",center_override=(0,0,0))
             # Save the new mesh as dae
             blender.save_mesh(new_path)
-            # Save the new model.sdf file with the updated reference
+            # Save the new model.sdf file with the updated reference to the .dae file
             model_mesh.update_uri_in_xml_references(new_uri)
             model.write_sdf_file()
     except Exception as e:

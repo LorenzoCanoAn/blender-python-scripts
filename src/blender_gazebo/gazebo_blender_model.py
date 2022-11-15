@@ -1,9 +1,11 @@
 """By Lorenzo Cano Andres
-Classes to manipulate gazebo models and their different components
+Classes to manipulate gazebo models and their different components, and to manipulate them in
+Blender.
 """
 # IMPORTS
 from xml.etree.ElementTree import ElementTree
 import os
+import json
 import shutil
 from subprocess import call
 
@@ -33,7 +35,7 @@ def models_from_folder(folder: str):
     list_of_models = list()
     for model_name in os.listdir(folder):
         try:
-            list_of_models.append(GazeboModel(
+            list_of_models.append(GazeboBlenderModel(
                 os.path.join(folder, model_name)))
         except Exception as e:
             print(e)
@@ -50,7 +52,7 @@ def copy_model_with_different_name(model, new_name, destination_folder  = None):
     - The name in the model.config file
     - The uri of the meshes inside the model.sdf files
     '''
-    assert isinstance(model, GazeboModel)
+    assert isinstance(model, GazeboBlenderModel)
     # First, copy all the contents fo the model to new folder
     models_folder = os.path.dirname(model.base_folder)
     if destination_folder is None:
@@ -62,7 +64,7 @@ def copy_model_with_different_name(model, new_name, destination_folder  = None):
         shutil.rmtree(copied_model_path)
     cp_dir(model.base_folder, copied_model_path)
     # Second change the name in the model.config and model.sdf files
-    copied_model = GazeboModel(copied_model_path)
+    copied_model = GazeboBlenderModel(copied_model_path)
     copied_model.change_name(new_name)
     # Third, change the base path of the URIs of the meshes
     for mesh in copied_model.meshes:
@@ -154,9 +156,10 @@ def change_uri_root(original_gazebo_uri, new_model_name):
 
 # CLASSES
 
-class GazeboModel:
+class GazeboBlenderModel:
     """
     Basic class to manage the subfolders and files that compose a gazebo model
+    and to handle changes to the model in Blender
     """
 
     def __init__(self, path):
@@ -189,15 +192,17 @@ class GazeboModel:
     
     def _load_files(self, after_fix = False):
         """
-        This will load the desired .xml file and report return it as a elementtree
+        Loadoad the desired .xml file and report return it as a elementtree
         """
         self.config_tree = load_xml_file(self.config_file_path)
         self.sdf_tree = load_xml_file(self.sdf_file_path)
 
     def _parse_sdf_file(self, after_fix=False):
-        """This function reads the .sdf (which is an .xml) file and tries to find the meshes 
+        """
+        Reads the .sdf (which is an .xml) file and tries to find the meshes 
         mentioned in it in the meshes file, in the case that it finds them, 
-        it stores the path to the mesh files, and sets the 'local_meshes' to true"""
+        it stores the path to the mesh files, and sets the 'local_meshes' to true
+        """
         # Extrat the relevant info fromt the sdf file
         self.meshes = list()
         for child in self.sdf_tree.iter():
@@ -265,10 +270,11 @@ class GazeboModelMesh:
     from this class
     """
 
-    def __init__(self, parent: GazeboModel, xml_element):
+    def __init__(self, parent: GazeboBlenderModel, xml_element):
         self.parent = parent
         self.xml_elements = [xml_element,]
         self._parse_data()
+        self.mesh_info = BlenderMeshInfo(self)
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     def __str__(self):
         return f"Model mesh: {self.uri}"
@@ -340,11 +346,45 @@ class GazeboModelMesh:
     def update_uri_in_xml_references(self, new_uri):
         '''
         If the model should now load a new mesh file, this must be specified in the model.sdf (.xml)
-        file. With this function, the new uri can be specified and it will be modified'''
+        file. With this function, the new uri can be specified and it will be modified
+        '''
         for ref in self.xml_elements:
             uri_element = ref.find("uri")
             if not uri_element is None:
                 uri_element.text = new_uri
+
+#-----------------------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------------------
+class BlenderMeshInfo:
+    def __init__(self, parent: GazeboModelMesh):
+        self.parent = parent
+        self.parse_blender_data_file()
+
+    def parse_blender_data_file(self):
+        """
+        Reads the blender_info.txt file in the model folder, and 
+        stores the data inside this class
+        """
+        self.blender_data_file_path = os.path.splitext(self.parent.path)[0] + "_info.json"
+        try:
+            with open(self.blender_data_file_path,"r") as f:
+                self.data = json.load(f)
+        except: 
+            self.data = {"UPPER_POINTS":{}, "GROUND_POINTS":{}}
+            self.write_data_to_file()
+            self.parse_blender_data_file()
+ 
+
+    def write_data_to_file(self):
+        with open(self.blender_data_file_path, "w") as f:
+            f.write(json.dumps(self.data,indent=1))
+
+    def set_new_ground_points(self, new_ground_points):
+        self.data["GROUND_POINTS"] = new_ground_points 
+
+    def set_new_upper_points(self, new_upper_points):
+        self.data["UPPER_POINTS"] = new_upper_points
+
 
 
 # MAIN
