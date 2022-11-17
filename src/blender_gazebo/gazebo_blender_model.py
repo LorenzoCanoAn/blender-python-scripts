@@ -8,8 +8,7 @@ import os
 import json
 import shutil
 from subprocess import call
-
-
+import blender_gazebo.blender_functions as blender
 # GLOBAL VARIABLES
 SUBT_MODELS_DIRECTORY = "/home/lorenzo/git/subt_gazebo/models"
 
@@ -75,6 +74,7 @@ def copy_model_with_different_name(model, new_name, destination_folder  = None):
             xml_reference.find("uri").text = new_uri
             print(xml_reference.find("uri").text)
     copied_model.write_sdf_file()
+    return copied_model
     
 #-----------------------------------------------------------------------------------------------------------------------------------
 def is_type_in_folder(folder, type_termination):
@@ -257,7 +257,8 @@ class GazeboBlenderModel:
         self.write_config_file()
         self.sdf_tree.find("model").attrib["name"] = new_name
         self.write_sdf_file()
-        
+    
+            
 
 # -----------------------------------------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------------------------------------------------------------
@@ -352,6 +353,19 @@ class GazeboModelMesh:
             uri_element = ref.find("uri")
             if not uri_element is None:
                 uri_element.text = new_uri
+
+    def select_ground_points(self, deselect_previous = True):
+        """Select in blender the points asociated with the ground"""
+        points_to_select = self.mesh_info.data["GROUND_POINTS"]
+        blender.select_points(points_to_select, deselect_previous=deselect_previous)
+    def select_upper_points(self, deselect_previous = True):
+        """Select in blender the points asociated with the ground"""
+        points_to_select = self.mesh_info.data["UPPER_POINTS"] 
+        blender.select_points(points_to_select, deselect_previous=deselect_previous)
+    def select_all_points(self):
+        self.select_ground_points()
+        self.select_upper_points(deselect_previous=False)
+
 
 #-----------------------------------------------------------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------------------------------------------------------

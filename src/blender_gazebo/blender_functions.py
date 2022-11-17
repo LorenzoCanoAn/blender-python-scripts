@@ -1,6 +1,6 @@
 import os
 import bpy
-from blender_gazebo.gazebo_blender_model import models_from_folder, GazeboBlenderModel, GazeboModelMesh
+from blender_gazebo.gazebo_blender_model import GazeboBlenderModel, GazeboModelMesh
 
 
 
@@ -83,3 +83,23 @@ def save_mesh(file_path):
     elif str.lower(extension) == ".dae":
         bpy.ops.wm.collada_export(filepath=file_path)
     print("MODEL SAVED")
+
+def deselect_everything():
+    """Deselect every vertex, edge and polygon"""
+    for key in bpy.data.objects.keys():
+        obj = bpy.data.objects[key]
+        for polygon in obj.data.polygons:
+            polygon.select = False
+        for edge in obj.data.edges:
+            edge.select = False
+        for vertex in obj.data.vertices:
+            vertex.select = False
+
+def select_points(points_to_select, deselect_previous = True):
+    for key in points_to_select.keys():
+        obj = bpy.data.objects.get(key)
+        p_indices = points_to_select[key]
+        if deselect_previous:
+            deselect_everything()
+        for i in p_indices:
+            obj.data.vertices[i].select = True
